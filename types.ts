@@ -39,6 +39,8 @@ export interface Holiday {
   id: string;
   name: string;
   date: string;
+  startTime?: string; // HH:MM
+  endTime?: string; // HH:MM
 }
 
 export interface ScheduleEntry {

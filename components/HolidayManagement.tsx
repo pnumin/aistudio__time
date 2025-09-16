@@ -9,6 +9,9 @@ const HolidayManagement: React.FC = () => {
     // Form state
     const [holidayName, setHolidayName] = useState('');
     const [holidayDate, setHolidayDate] = useState('');
+    const [holidayStartTime, setHolidayStartTime] = useState('');
+    const [holidayEndTime, setHolidayEndTime] = useState('');
+    const [formError, setFormError] = useState<string | null>(null);
 
     useEffect(() => {
         const storedHolidays = localStorage.getItem('holidays');
@@ -21,12 +24,19 @@ const HolidayManagement: React.FC = () => {
         localStorage.setItem('holidays', JSON.stringify(data));
     };
     
-    const sortedHolidays = [...holidays].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sortedHolidays = [...holidays].sort((a, b) => {
+        const dateComparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+        if (dateComparison !== 0) return dateComparison;
+        return (a.startTime || '00:00').localeCompare(b.startTime || '00:00');
+    });
 
     const openModal = (holiday: Holiday | null) => {
         setCurrentHoliday(holiday);
         setHolidayName(holiday ? holiday.name : '');
         setHolidayDate(holiday ? holiday.date : '');
+        setHolidayStartTime(holiday ? holiday.startTime ?? '' : '');
+        setHolidayEndTime(holiday ? holiday.endTime ?? '' : '');
+        setFormError(null);
         setIsModalOpen(true);
     };
 
@@ -35,22 +45,41 @@ const HolidayManagement: React.FC = () => {
         setCurrentHoliday(null);
         setHolidayName('');
         setHolidayDate('');
+        setHolidayStartTime('');
+        setHolidayEndTime('');
+        setFormError(null);
     };
 
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
+        setFormError(null);
         if (!holidayName.trim() || !holidayDate) return;
 
+        if ((holidayStartTime && !holidayEndTime) || (!holidayStartTime && holidayEndTime)) {
+            setFormError('시작 시간과 종료 시간을 모두 입력하거나 모두 비워두세요.');
+            return;
+        }
+        if (holidayStartTime && holidayEndTime && holidayStartTime >= holidayEndTime) {
+            setFormError('종료 시간은 시작 시간보다 이후여야 합니다.');
+            return;
+        }
+
         let updatedHolidays;
+        const holidayData: Omit<Holiday, 'id'> = {
+            name: holidayName,
+            date: holidayDate,
+            startTime: holidayStartTime || undefined,
+            endTime: holidayEndTime || undefined,
+        };
+
         if (currentHoliday) { // Update
             updatedHolidays = holidays.map(h =>
-                h.id === currentHoliday.id ? { ...h, name: holidayName, date: holidayDate } : h
+                h.id === currentHoliday.id ? { ...h, ...holidayData } : h
             );
         } else { // Create
             const newHoliday: Holiday = {
                 id: new Date().toISOString(),
-                name: holidayName,
-                date: holidayDate,
+                ...holidayData
             };
             updatedHolidays = [...holidays, newHoliday];
         }
@@ -82,7 +111,7 @@ const HolidayManagement: React.FC = () => {
                 <table className="min-w-full bg-white">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">날짜</th>
+                            <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">날짜 및 시간</th>
                             <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">휴일명</th>
                             <th className="py-3 px-6 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">관리</th>
                         </tr>
@@ -90,7 +119,12 @@ const HolidayManagement: React.FC = () => {
                     <tbody className="divide-y divide-gray-200">
                         {sortedHolidays.length > 0 ? sortedHolidays.map(holiday => (
                             <tr key={holiday.id}>
-                                <td className="py-4 px-6 whitespace-nowrap">{holiday.date}</td>
+                                <td className="py-4 px-6 whitespace-nowrap">
+                                    {holiday.date}
+                                    {holiday.startTime && holiday.endTime && (
+                                        <span className="ml-2 text-sm text-gray-600">({holiday.startTime} - {holiday.endTime})</span>
+                                    )}
+                                </td>
                                 <td className="py-4 px-6 whitespace-nowrap font-medium text-gray-900">{holiday.name}</td>
                                 <td className="py-4 px-6 whitespace-nowrap text-right text-sm font-medium">
                                     <button onClick={() => openModal(holiday)} className="text-indigo-600 hover:text-indigo-900 mr-4">수정</button>
@@ -126,6 +160,26 @@ const HolidayManagement: React.FC = () => {
                                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required
                                 />
                             </div>
+                             <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="holiday-start-time" className="block text-sm font-medium text-gray-700">시작 시간</label>
+                                    <input
+                                        id="holiday-start-time" type="time" value={holidayStartTime} onChange={(e) => setHolidayStartTime(e.target.value)}
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="holiday-end-time" className="block text-sm font-medium text-gray-700">종료 시간</label>
+                                    <input
+                                        id="holiday-end-time" type="time" value={holidayEndTime} onChange={(e) => setHolidayEndTime(e.target.value)} min={holidayStartTime}
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                    />
+                                </div>
+                            </div>
+                            <p className="text-xs text-gray-500">시간을 지정하지 않으면 종일 휴일로 처리됩니다.</p>
+
+                            {formError && <p className="text-sm text-red-600">{formError}</p>}
+
                             <div className="mt-6 flex justify-end space-x-4">
                                 <button type="button" onClick={closeModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">취소</button>
                                 <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">저장</button>

@@ -63,7 +63,6 @@ const generateTimetableLogic = (
     const subjectHoursLeft = new Map<string, number>(subjects.map(s => [s.id, s.totalHours]));
     const professorSchedule = new Map<string, string>(); // Key: "profId:YYYY-MM-DD:HH:MM", Value: subjectId
 
-    const holidaySet = new Set(holidays.map(h => new Date(h.date).toISOString().split('T')[0]));
     const vacationMap = new Map<string, { start: number, end: number }[]>();
     professors.forEach(p => {
         vacationMap.set(p.id, p.vacations.map(v => ({
@@ -81,51 +80,63 @@ const generateTimetableLogic = (
         
         dailyConsecutiveInfo.clear();
 
-        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidaySet.has(dateStr)) {
-            for (const slot of timeSlots) {
-                for (const prof of professors) {
-                    const profIsOnVacation = vacationMap.get(prof.id)?.some(v => {
-                        const currentDateTime = currentDate.setHours(0,0,0,0);
-                        return currentDateTime >= v.start && currentDateTime <= v.end;
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Check for weekdays
+            const holidaysOnThisDay = holidays.filter(h => h.date === dateStr);
+            const isFullDayHoliday = holidaysOnThisDay.some(h => !h.startTime || !h.endTime);
+
+            if (!isFullDayHoliday) {
+                for (const slot of timeSlots) {
+                    const isHolidaySlot = holidaysOnThisDay.some(h => {
+                        // Check for partial day holiday overlap
+                        return h.startTime && h.endTime && slot.start >= h.startTime && slot.start < h.endTime;
                     });
-                    if (profIsOnVacation) continue;
 
-                    const scheduleKey = `${prof.id}:${dateStr}:${slot.start}`;
-                    if (professorSchedule.has(scheduleKey)) continue;
+                    if (isHolidaySlot) continue; // Skip this slot if it's a partial holiday
 
-                    for (const subjectId of sortedSubjectIds) {
-                        const subject = subjectMap.get(subjectId)!;
-                        if (subject.professorId !== prof.id || (subjectHoursLeft.get(subject.id) || 0) === 0) {
-                            continue;
-                        }
-
-                        const prereqsDone = (subject.prerequisiteIds ?? []).every(prereqId => (subjectHoursLeft.get(prereqId) || 0) === 0);
-                        if (!prereqsDone) continue;
-                        
-                        const consecutiveInfo = dailyConsecutiveInfo.get(prof.id);
-                        if (consecutiveInfo && consecutiveInfo.subjectId === subject.id && consecutiveInfo.count >= 3) {
-                            continue;
-                        }
-
-                        // Schedule it
-                        newTimetable.push({
-                            id: `${dateStr}-${slot.start}-${prof.id}`,
-                            subjectId: subject.id,
-                            professorId: prof.id,
-                            date: dateStr,
-                            startTime: slot.start,
-                            endTime: slot.end,
+                    for (const prof of professors) {
+                        const profIsOnVacation = vacationMap.get(prof.id)?.some(v => {
+                            const currentDateTime = currentDate.setHours(0,0,0,0);
+                            return currentDateTime >= v.start && currentDateTime <= v.end;
                         });
-                        professorSchedule.set(scheduleKey, subject.id);
-                        subjectHoursLeft.set(subject.id, (subjectHoursLeft.get(subject.id) || 1) - 1);
-                        
-                        if (consecutiveInfo && consecutiveInfo.subjectId === subject.id) {
-                            consecutiveInfo.count++;
-                        } else {
-                            dailyConsecutiveInfo.set(prof.id, { subjectId: subject.id, count: 1 });
+                        if (profIsOnVacation) continue;
+
+                        const scheduleKey = `${prof.id}:${dateStr}:${slot.start}`;
+                        if (professorSchedule.has(scheduleKey)) continue;
+
+                        for (const subjectId of sortedSubjectIds) {
+                            const subject = subjectMap.get(subjectId)!;
+                            if (subject.professorId !== prof.id || (subjectHoursLeft.get(subject.id) || 0) === 0) {
+                                continue;
+                            }
+
+                            const prereqsDone = (subject.prerequisiteIds ?? []).every(prereqId => (subjectHoursLeft.get(prereqId) || 0) === 0);
+                            if (!prereqsDone) continue;
+                            
+                            const consecutiveInfo = dailyConsecutiveInfo.get(prof.id);
+                            if (consecutiveInfo && consecutiveInfo.subjectId === subject.id && consecutiveInfo.count >= 3) {
+                                continue;
+                            }
+
+                            // Schedule it
+                            newTimetable.push({
+                                id: `${dateStr}-${slot.start}-${prof.id}`,
+                                subjectId: subject.id,
+                                professorId: prof.id,
+                                date: dateStr,
+                                startTime: slot.start,
+                                endTime: slot.end,
+                            });
+                            professorSchedule.set(scheduleKey, subject.id);
+                            subjectHoursLeft.set(subject.id, (subjectHoursLeft.get(subject.id) || 1) - 1);
+                            
+                            if (consecutiveInfo && consecutiveInfo.subjectId === subject.id) {
+                                consecutiveInfo.count++;
+                            } else {
+                                dailyConsecutiveInfo.set(prof.id, { subjectId: subject.id, count: 1 });
+                            }
+                            
+                            break; // Move to next professor for this slot
                         }
-                        
-                        break; // Move to next professor for this slot
                     }
                 }
             }
@@ -224,18 +235,18 @@ const TimetableManagement: React.FC = () => {
         Create a detailed class schedule from ${startDate} to ${endDate}.
         Follow these rules strictly:
         1.  Classes are held on weekdays (Monday to Friday).
-        2.  Do not schedule classes on weekends or on the provided holidays.
+        2.  Do not schedule classes on weekends or during the provided holidays. Some holidays might be for a full day (no startTime/endTime), while others might be for a specific time range (with startTime/endTime). Respect these specific times.
         3.  The daily schedule consists of 8 one-hour slots: 09:00-09:50, 10:00-10:50, 11:00-11:50, 13:00-13:50, 14:00-14:50, 15:00-15:50, 16:00-16:50, 17:00-17:50. The period from 12:00 to 13:00 is a lunch break.
         4.  Each subject has a total number of hours that must be completed. Assign one hour of class per available time slot.
         5.  Subjects have prerequisites. A subject can only begin after all of its prerequisite subjects have been fully completed.
         6.  A professor cannot teach if they are on vacation. Do not schedule their classes during their vacation period.
-        7.  A single subject cannot be scheduled for more than 3 consecutive hours on the same day.
+        7.  A single subject cannot be scheduled for more than 3 consecutive hours on the same day for the same professor.
         8.  Different professors can teach their respective classes simultaneously in the same time slot.
 
         Data:
         - Subjects (name, totalHours, professor, prerequisites): ${JSON.stringify(subjects.map(s => ({ name: s.name, totalHours: s.totalHours, professor: professors.find(p => p.id === s.professorId)?.name || 'N/A', prerequisites: s.prerequisiteIds?.map(pId => subjects.find(sub => sub.id === pId)?.name).filter(Boolean) || [] })))}
         - Professors (name, vacations): ${JSON.stringify(professors.map(p => ({ name: p.name, vacations: p.vacations })))}
-        - Holidays (name, date): ${JSON.stringify(holidays)}
+        - Holidays (name, date, startTime, endTime): ${JSON.stringify(holidays)}
 
         Output a JSON array of schedule entry objects. Each object must have the following keys: "date" (YYYY-MM-DD), "startTime" (HH:MM), "endTime" (HH:MM), and "subjectName".
         Return ONLY the raw JSON array, without any surrounding text or markdown.
@@ -358,8 +369,6 @@ const TimetableManagement: React.FC = () => {
         
         const gridCells: (Date | null)[] = Array(startDayOfWeek).fill(null).concat(Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)));
         
-        const holidayMap = new Map(holidays.map(h => [h.date, h.name]));
-
         return (
             <div className="grid grid-cols-7 border-t border-l">
                 {['일', '월', '화', '수', '목', '금', '토'].map(day => <div key={day} className="text-center font-bold p-2 border-b border-r bg-gray-50">{day}</div>)}
@@ -368,7 +377,15 @@ const TimetableManagement: React.FC = () => {
                         {day && (
                             <>
                                 <span className="font-semibold">{day.getDate()}</span>
-                                {holidayMap.has(day.toISOString().split('T')[0]) && <div className="text-xs text-red-600 font-bold">{holidayMap.get(day.toISOString().split('T')[0])}</div>}
+                                {holidays
+                                    .filter(h => h.date === day.toISOString().split('T')[0])
+                                    .map(holiday => (
+                                        <div key={holiday.id} className="text-xs text-red-600 font-bold">
+                                            {holiday.name}
+                                            {holiday.startTime && holiday.endTime && ` (${holiday.startTime}-${holiday.endTime})`}
+                                        </div>
+                                    ))
+                                }
                                 {timetable
                                     .filter(e => e.date === day.toISOString().split('T')[0])
                                     .sort((a,b) => a.startTime.localeCompare(b.startTime))
