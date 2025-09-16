@@ -1,0 +1,5 @@
+{
+  "name": "Timetable Management System",
+  "description": "A web-based timetable management program to automate and streamline scheduling for educational institutes. It provides an intuitive interface and is designed for offline operation.",
+  "requestFramePermissions": []
+}
