@@ -72,13 +72,13 @@ const generateTimetableLogic = (
     });
 
     let currentDate = new Date(startDate);
-    let dailyConsecutiveInfo = new Map<string, { subjectId: string, count: number }>(); // Key: profId
+    let dailySubjectHours = new Map<string, number>(); // Key: "profId:subjectId", Value: count
 
     while (currentDate <= endDate) {
         const dateStr = currentDate.toISOString().split('T')[0];
         const dayOfWeek = currentDate.getDay();
         
-        dailyConsecutiveInfo.clear();
+        dailySubjectHours.clear(); // Reset daily count
 
         if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Check for weekdays
             const holidaysOnThisDay = holidays.filter(h => h.date === dateStr);
@@ -112,8 +112,10 @@ const generateTimetableLogic = (
                             const prereqsDone = (subject.prerequisiteIds ?? []).every(prereqId => (subjectHoursLeft.get(prereqId) || 0) === 0);
                             if (!prereqsDone) continue;
                             
-                            const consecutiveInfo = dailyConsecutiveInfo.get(prof.id);
-                            if (consecutiveInfo && consecutiveInfo.subjectId === subject.id && consecutiveInfo.count >= 3) {
+                            // Check daily hour limit for this subject and professor
+                            const dailyKey = `${prof.id}:${subject.id}`;
+                            const dailyHours = dailySubjectHours.get(dailyKey) || 0;
+                            if (dailyHours >= 3) {
                                 continue;
                             }
 
@@ -129,11 +131,8 @@ const generateTimetableLogic = (
                             professorSchedule.set(scheduleKey, subject.id);
                             subjectHoursLeft.set(subject.id, (subjectHoursLeft.get(subject.id) || 1) - 1);
                             
-                            if (consecutiveInfo && consecutiveInfo.subjectId === subject.id) {
-                                consecutiveInfo.count++;
-                            } else {
-                                dailyConsecutiveInfo.set(prof.id, { subjectId: subject.id, count: 1 });
-                            }
+                            // Update daily count
+                            dailySubjectHours.set(dailyKey, dailyHours + 1);
                             
                             break; // Move to next professor for this slot
                         }
@@ -240,7 +239,7 @@ const TimetableManagement: React.FC = () => {
         4.  Each subject has a total number of hours that must be completed. Assign one hour of class per available time slot.
         5.  Subjects have prerequisites. A subject can only begin after all of its prerequisite subjects have been fully completed.
         6.  A professor cannot teach if they are on vacation. Do not schedule their classes during their vacation period.
-        7.  A single subject cannot be scheduled for more than 3 consecutive hours on the same day for the same professor.
+        7.  A single subject cannot be scheduled for more than 3 hours in total on the same day for the same professor.
         8.  Different professors can teach their respective classes simultaneously in the same time slot.
 
         Data:
