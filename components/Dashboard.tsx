@@ -15,6 +15,12 @@ type Tab = 'professors' | 'subjects' | 'holidays' | 'timetable';
 const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState<Tab>('timetable');
 
+  const roleDisplayNames: Record<UserRole, string> = {
+    [UserRole.ADMIN]: '관리자',
+    [UserRole.STUDENT]: '학생',
+    [UserRole.PROFESSOR]: '교수',
+  };
+
   const renderAdminDashboard = () => (
     <>
       <div className="border-b border-gray-200">
@@ -62,7 +68,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         </nav>
       </div>
       <div className="pt-8">
-        {activeTab === 'timetable' && <TimetableManagement />}
+        {activeTab === 'timetable' && <TimetableManagement user={user} />}
         {activeTab === 'subjects' && <SubjectManagement />}
         {activeTab === 'professors' && <ProfessorManagement />}
         {activeTab === 'holidays' && <HolidayManagement />}
@@ -82,10 +88,39 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         </nav>
       </div>
       <div className="pt-8">
-        <TimetableManagement />
+        <TimetableManagement user={user} />
       </div>
     </>
   );
+  
+  const renderProfessorDashboard = () => (
+    <>
+       <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+          <button
+            className={'border-indigo-500 text-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'}
+          >
+            내 시간표 조회
+          </button>
+        </nav>
+      </div>
+      <div className="pt-8">
+        <TimetableManagement user={user} />
+      </div>
+    </>
+  );
+  
+  const renderContent = () => {
+    switch (user.role) {
+      case UserRole.ADMIN:
+        return renderAdminDashboard();
+      case UserRole.PROFESSOR:
+        return renderProfessorDashboard();
+      case UserRole.STUDENT:
+      default:
+        return renderStudentDashboard();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -94,7 +129,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           <h1 className="text-3xl font-bold text-gray-900">시간표 관리 시스템</h1>
           <div className="flex items-center space-x-4">
             <span className="text-gray-600">
-              {user.email} ({user.role})
+              {user.email} ({roleDisplayNames[user.role]})
             </span>
             <button
               onClick={onLogout}
@@ -107,7 +142,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       </header>
       <main>
         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          {user.role === UserRole.ADMIN ? renderAdminDashboard() : renderStudentDashboard()}
+          {renderContent()}
         </div>
       </main>
     </div>

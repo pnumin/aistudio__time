@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Subject, Professor, Holiday, ScheduleEntry, UserRole } from '../types';
+import { Subject, Professor, Holiday, ScheduleEntry, UserRole, User } from '../types';
 
 const timeSlots = [
     { start: '09:00', end: '09:50' }, { start: '10:00', end: '10:50' }, { start: '11:00', end: '11:50' },
@@ -151,8 +151,11 @@ const generateTimetableLogic = (
     return { timetable: newTimetable, error: null };
 };
 
+interface TimetableManagementProps {
+    user: User;
+}
 
-const TimetableManagement: React.FC = () => {
+const TimetableManagement: React.FC<TimetableManagementProps> = ({ user }) => {
     const [timetable, setTimetable] = useState<ScheduleEntry[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [professors, setProfessors] = useState<Professor[]>([]);
@@ -161,7 +164,6 @@ const TimetableManagement: React.FC = () => {
     const [endDate, setEndDate] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
-    const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
     const [ai, setAi] = useState<GoogleGenAI | null>(null);
     
     const [viewMode, setViewMode] = useState<'monthly' | 'weekly'>('weekly');
@@ -179,11 +181,6 @@ const TimetableManagement: React.FC = () => {
 
         const storedTimetable = localStorage.getItem('timetable');
         if (storedTimetable) setTimetable(JSON.parse(storedTimetable));
-
-        const storedUser = localStorage.getItem('currentUser');
-        if (storedUser) {
-          setCurrentUserRole(JSON.parse(storedUser).role);
-        }
 
         if (process.env.API_KEY) {
           setAi(new GoogleGenAI({apiKey: process.env.API_KEY}));
@@ -274,7 +271,7 @@ const TimetableManagement: React.FC = () => {
       }
     };
     
-    const { subjectColorMap, getSubjectInfo } = useMemo(() => {
+    const { getSubjectInfo } = useMemo(() => {
         const colors = ['bg-sky-100', 'bg-green-100', 'bg-purple-100', 'bg-orange-100', 'bg-pink-100', 'bg-teal-100', 'bg-red-100', 'bg-yellow-100', 'bg-indigo-100', 'bg-gray-100'];
         const colorMap = new Map<string, string>();
         subjects.forEach((subject, index) => {
@@ -291,11 +288,22 @@ const TimetableManagement: React.FC = () => {
                 color: colorMap.get(subject.id) || 'bg-gray-50',
             };
         };
-        return { subjectColorMap: colorMap, getSubjectInfo: getInfo };
+        return { getSubjectInfo: getInfo };
     }, [subjects, professors]);
 
+    const filteredTimetable = useMemo(() => {
+        if (user.role === UserRole.PROFESSOR) {
+            const currentProfessor = professors.find(p => p.email === user.email);
+            if (currentProfessor) {
+                return timetable.filter(entry => entry.professorId === currentProfessor.id);
+            }
+            return [];
+        }
+        return timetable;
+    }, [timetable, user, professors]);
 
-    const isAdmin = currentUserRole === UserRole.ADMIN;
+
+    const isAdmin = user.role === UserRole.ADMIN;
     
     const renderCalendar = () => {
         if (viewMode === 'weekly') return renderWeeklyView();
@@ -313,7 +321,7 @@ const TimetableManagement: React.FC = () => {
             return day;
         });
 
-        const weekTimetable = timetable.filter(entry => {
+        const weekTimetable = filteredTimetable.filter(entry => {
             const entryDate = new Date(entry.date);
             const weekStartDate = new Date(weekDays[0]);
             weekStartDate.setHours(0,0,0,0);
@@ -385,7 +393,7 @@ const TimetableManagement: React.FC = () => {
                                         </div>
                                     ))
                                 }
-                                {timetable
+                                {filteredTimetable
                                     .filter(e => e.date === day.toISOString().split('T')[0])
                                     .sort((a,b) => a.startTime.localeCompare(b.startTime))
                                     .map(entry => {
@@ -462,9 +470,11 @@ const TimetableManagement: React.FC = () => {
                 </div>
             </div>
             
-            {timetable.length > 0 ? renderCalendar() : (
+            {filteredTimetable.length > 0 ? renderCalendar() : (
                 <div className="text-center py-16 text-gray-500">
-                    {isAdmin ? '시간표를 생성해주세요.' : '생성된 시간표가 없습니다.'}
+                    {user.role === UserRole.ADMIN && '시간표를 생성해주세요.'}
+                    {user.role === UserRole.STUDENT && '생성된 시간표가 없습니다.'}
+                    {user.role === UserRole.PROFESSOR && '배정된 강의가 없습니다.'}
                 </div>
             )}
         </div>

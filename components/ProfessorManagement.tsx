@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, FormEvent } from 'react';
 import { Professor, Vacation } from '../types';
 
@@ -8,6 +7,7 @@ const ProfessorManagement: React.FC = () => {
     const [isVacationModalOpen, setIsVacationModalOpen] = useState(false);
     const [currentProfessor, setCurrentProfessor] = useState<Professor | null>(null);
     const [professorName, setProfessorName] = useState('');
+    const [professorEmail, setProfessorEmail] = useState('');
     const [vacationStartDate, setVacationStartDate] = useState('');
     const [vacationEndDate, setVacationEndDate] = useState('');
 
@@ -26,6 +26,7 @@ const ProfessorManagement: React.FC = () => {
     const openProfessorModal = (prof: Professor | null) => {
         setCurrentProfessor(prof);
         setProfessorName(prof ? prof.name : '');
+        setProfessorEmail(prof ? prof.email : '');
         setIsProfessorModalOpen(true);
     };
 
@@ -33,22 +34,24 @@ const ProfessorManagement: React.FC = () => {
         setIsProfessorModalOpen(false);
         setCurrentProfessor(null);
         setProfessorName('');
+        setProfessorEmail('');
     };
     
     // Professor CRUD
     const handleProfessorSubmit = (e: FormEvent) => {
         e.preventDefault();
-        if (!professorName.trim()) return;
+        if (!professorName.trim() || !professorEmail.trim()) return;
 
         let updatedProfessors;
         if (currentProfessor) { // Update
             updatedProfessors = professors.map(p =>
-                p.id === currentProfessor.id ? { ...p, name: professorName } : p
+                p.id === currentProfessor.id ? { ...p, name: professorName, email: professorEmail } : p
             );
         } else { // Create
             const newProfessor: Professor = {
                 id: new Date().toISOString(),
                 name: professorName,
+                email: professorEmail,
                 vacations: [],
             };
             updatedProfessors = [...professors, newProfessor];
@@ -137,6 +140,7 @@ const ProfessorManagement: React.FC = () => {
                     <thead className="bg-gray-50">
                         <tr>
                             <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이름</th>
+                            <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이메일</th>
                             <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">휴가</th>
                             <th className="py-3 px-6 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">관리</th>
                         </tr>
@@ -145,6 +149,7 @@ const ProfessorManagement: React.FC = () => {
                         {professors.length > 0 ? professors.map(prof => (
                             <tr key={prof.id}>
                                 <td className="py-4 px-6 whitespace-nowrap">{prof.name}</td>
+                                <td className="py-4 px-6 whitespace-nowrap">{prof.email}</td>
                                 <td className="py-4 px-6 whitespace-nowrap">{prof.vacations.length} 건</td>
                                 <td className="py-4 px-6 whitespace-nowrap text-right text-sm font-medium">
                                     <button onClick={() => openVacationModal(prof)} className="text-green-600 hover:text-green-900 mr-4">휴가 관리</button>
@@ -154,7 +159,7 @@ const ProfessorManagement: React.FC = () => {
                             </tr>
                         )) : (
                             <tr>
-                                <td colSpan={3} className="py-4 px-6 text-center text-gray-500">등록된 교수가 없습니다.</td>
+                                <td colSpan={4} className="py-4 px-6 text-center text-gray-500">등록된 교수가 없습니다.</td>
                             </tr>
                         )}
                     </tbody>
@@ -167,16 +172,29 @@ const ProfessorManagement: React.FC = () => {
                     <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
                         <h3 className="text-lg font-bold mb-4">{currentProfessor ? '교수 정보 수정' : '새 교수 추가'}</h3>
                         <form onSubmit={handleProfessorSubmit}>
-                            <label htmlFor="prof-name" className="block text-sm font-medium text-gray-700">이름</label>
-                            <input
-                                id="prof-name"
-                                type="text"
-                                value={professorName}
-                                onChange={(e) => setProfessorName(e.target.value)}
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                required
-                                autoFocus
-                            />
+                            <div>
+                                <label htmlFor="prof-name" className="block text-sm font-medium text-gray-700">이름</label>
+                                <input
+                                    id="prof-name"
+                                    type="text"
+                                    value={professorName}
+                                    onChange={(e) => setProfessorName(e.target.value)}
+                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    required
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="mt-4">
+                                <label htmlFor="prof-email" className="block text-sm font-medium text-gray-700">이메일</label>
+                                <input
+                                    id="prof-email"
+                                    type="email"
+                                    value={professorEmail}
+                                    onChange={(e) => setProfessorEmail(e.target.value)}
+                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    required
+                                />
+                            </div>
                             <div className="mt-6 flex justify-end space-x-4">
                                 <button type="button" onClick={closeProfessorModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">취소</button>
                                 <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">저장</button>
